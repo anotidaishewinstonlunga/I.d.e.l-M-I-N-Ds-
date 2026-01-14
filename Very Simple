@@ -1,0 +1,12 @@
+global-issues-ai/
+│
+├── pages/
+│   ├── index.js        ← Frontend (UI)
+│   └── api/
+│       └── chat.js     ← Backend (AI + News)
+│
+├── styles/
+│   └── globals.css     ← Tailwind styles
+│
+├── tailwind.config.js
+└── .env.local
