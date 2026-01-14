@@ -1,0 +1,149 @@
+tailwind.config.js
+
+module.exports = {
+  content: ["./pages/**/*.{js,jsx}"],
+  theme: { extend: {} },
+  plugins: [],
+};
+
+
+styles/globals.css
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  background-color: #f8fafc;
+}
+
+
+pages/index.js
+
+import { useState } from "react";
+
+export default function Home() {
+  const [question, setQuestion] = useState("");
+  const [topic, setTopic] = useState("global");
+  const [region, setRegion] = useState("world");
+  const [answer, setAnswer] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const askQuestion = async () => {
+    if (!question) return;
+    setLoading(true);
+    setAnswer("");
+
+    const res = await fetch("/api/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question, topic, region }),
+    });
+
+    const data = await res.json();
+    setAnswer(data.answer);
+    setLoading(false);
+  };
+
+  return (
+    <div className="min-h-screen flex flex-col items-center px-4 py-10">
+      <h1 className="text-3xl font-bold">🌍 Global Issues Explorer</h1>
+
+      <div className="max-w-3xl w-full bg-white p-4 mt-6 rounded-xl shadow">
+        <div className="flex gap-2 mb-3">
+          <select onChange={e => setTopic(e.target.value)} className="border p-2 w-1/2">
+            <option value="global">Global</option>
+            <option value="politics">Politics</option>
+            <option value="climate">Climate</option>
+            <option value="economy">Economy</option>
+            <option value="conflict">Conflict</option>
+          </select>
+
+          <select onChange={e => setRegion(e.target.value)} className="border p-2 w-1/2">
+            <option value="world">World</option>
+            <option value="africa">Africa</option>
+            <option value="asia">Asia</option>
+            <option value="europe">Europe</option>
+            <option value="americas">Americas</option>
+          </select>
+        </div>
+
+        <textarea
+          className="w-full border p-3 rounded mb-3"
+          rows="4"
+          placeholder="Ask about global issues..."
+          value={question}
+          onChange={e => setQuestion(e.target.value)}
+        />
+
+        <button
+          onClick={askQuestion}
+          className="bg-black text-white w-full py-2 rounded"
+        >
+          {loading ? "Analyzing..." : "Ask"}
+        </button>
+      </div>
+
+      <div className="max-w-3xl w-full bg-white p-6 mt-6 rounded-xl shadow">
+        {loading && <p>🌐 Analyzing global news...</p>}
+        {answer && <p className="whitespace-pre-line">{answer}</p>}
+      </div>
+    </div>
+  );
+}
+
+pages/api/chat.js
+
+import fetch from "node-fetch";
+
+export default async function handler(req, res) {
+  if (req.method !== "POST") return res.status(405).end();
+
+  const { question, topic, region } = req.body;
+  if (!question || question.length > 500) {
+    return res.status(400).json({ error: "Invalid question" });
+  }
+
+  try {
+    const newsRes = await fetch(
+      `https://newsapi.org/v2/everything?q=${topic}+${region}&pageSize=5&sortBy=publishedAt&apiKey=${process.env.NEWS_API_KEY}`
+    );
+    const news = await newsRes.json();
+
+    const summaries = news.articles.map(
+      a => `• ${a.title} (${a.source.name}): ${a.description}`
+    );
+
+    const prompt = `
+You are a neutral global affairs analyst.
+Use the news summaries to answer the question.
+
+News:
+${summaries.join("\n")}
+
+Question:
+${question}
+`;
+
+    const aiRes = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        messages: [{ role: "user", content: prompt }],
+        temperature: 0.4
+      })
+    });
+
+    const aiData = await aiRes.json();
+    res.json({ answer: aiData.choices[0].message.content });
+
+  } catch {
+    res.status(500).json({ error: "Server error" });
+  }
+}
+
+
